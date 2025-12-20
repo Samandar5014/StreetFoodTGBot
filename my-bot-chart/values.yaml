@@ -1,65 +1,62 @@
-# Количество реплик пода (сколько экземпляров бота запускать одновременно)
-# Для polling-бота обычно 1 — если больше, будет ошибка 409 от Telegram
+# amount of replica more than 1 will brin 409 error for telegram bots
 replicaCount: 1
 
-# Контейнер с образом бота
+# Container option and values
 image:
-  repository: samandar278/streetfood-bot  # Твой Docker-образ на Docker Hub
-  tag: latest  # Тег образа (можно фиксированный для стабильности, например sha)
-  pullPolicy: IfNotPresent  # Политика скачивания образа (локальный, если есть)
+  repository: samandar278/streetfood-bot  # docker-image in docker hub
+  tag: latest  # image teg (can be fixed for stability, example sha)
+  pullPolicy: IfNotPresent  # policy of downloading image (local, if it is exist)
 
-# Токен Telegram — передаётся через Argo CD parameters (безопасно!)
-# В Argo CD добавь parameter: bot.telegramToken = твой_токен
-# Это значение будет переопределено, плейсхолдер только для шаблона
+# Telegram token via argo cd parameters(sefest way)
 bot:
   telegramToken: "CHANGE_ME_IN_ARGO_CD"
 
-# Env пустой — токен берётся из автоматически созданного Secret (templates/secret.yaml)
+# Env empty couse token will be teken sefly from Secret (templates/secret.yaml)
 env: []
 
-# Секреты для pull образа из приватного репо (не нужно для твоего public образа)
+# secrets for pull image from private repo (dont need for public image)
 imagePullSecrets: []
 
-# Переопределение имени чарта (не нужно, оставь пустым)
+# redefining a chart name (should be empty we dont need it)
 nameOverride: ""
 fullnameOverride: ""
 
-# ServiceAccount для пода (создаётся автоматически, права минимальные)
+# ServiceAccount for production (will be created autamaticly, less permissions)
 serviceAccount:
   create: true
   automount: true
   annotations: {}
   name: ""
 
-# Аннотации и лейблы для пода (можно добавить для мониторинга или трассировки)
+# annotations and labels for the pod (can be added for manitoring)
 podAnnotations: {}
 podLabels: {}
 
-# Security context для пода и контейнера (безопасность, по умолчанию пусто)
+# Security context for production and also containers (security, empty by defult)
 podSecurityContext: {}
 securityContext: {}
 
-# Ресурсы контейнера (CPU/память) — лёгкие, чтобы бот работал стабильно даже на слабом кластере
+# reresources for the container (CPU/RAM) — lightweight, so that the bot works stably even on a weak cluster
 resources:
   limits:
-    cpu: 200m   # Максимум CPU
-    memory: 256Mi  # Максимум памяти
+    cpu: 200m   # MAX CPU
+    memory: 256Mi  # MAX RAM
   requests:
-    cpu: 100m   # Гарантировано CPU
-    memory: 128Mi  # Гарантировано памяти
+    cpu: 100m   # garanted CPU
+    memory: 128Mi  # garanted памяти
 
-# Автоскейлинг (HPA) — отключён, для polling-бота не нужен (может вызвать 409 ошибку)
+# autoscaling (HPA) — disabled, not needed for the polling bot (may cause a 409 error)
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
 
-# Node selector, tolerations, affinity — для размещения на конкретных нодах (не нужно для локального кластера)
+# Node selector, tolerations, affinity — for placement on specific nodes (not needed for a local cluster)
 nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# Дополнительные volumes и mounts (для credentials.json или других секретов — добавим позже, если нужно)
+#Additional volumes and mounts (for credentials.json or other secrets—we'll add them later if needed)
 volumes: []
 volumeMounts: []
