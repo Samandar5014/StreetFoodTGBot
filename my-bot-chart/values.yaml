@@ -165,5 +165,7 @@ image:
   repository: samandar278/streetfood-bot  # Docker-name
   tag: latest
   pullPolicy: IfNotPresent
-env:
-  TELEGRAM_TOKEN: "8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g"  # Secrets
+env: [] # Token from secret  
+
+bot:
+  telegramToken: "CHANGE_ME_IN_ARGO_CD"
