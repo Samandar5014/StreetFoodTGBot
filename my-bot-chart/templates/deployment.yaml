@@ -13,8 +13,11 @@ spec:
       {{- include "my-bot-chart.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        prometheus.io/scrape: "true"      # Включить сбор метрик Prometheus
+        prometheus.io/port: "8000"        # Порт метрик
+        prometheus.io/path: "/metrics"    # Стандартный путь (по умолчанию /metrics)
+      {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
