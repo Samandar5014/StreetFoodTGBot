@@ -5,6 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 import threading
 from prometheus_client import Counter, start_http_server
+import os
 
 # === Prometheus метрики ===
 ORDERS_TOTAL = Counter('streetfood_orders_total', 'Общее количество заказов', ['payment'])
@@ -16,8 +17,8 @@ def start_metrics_server():
 
 threading.Thread(target=start_metrics_server, daemon=True).start()
 
-# Настройки
-BOT_TOKEN = '8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g'
+# Настройки (токен из env в K8s, fallback для локального запуска)
+BOT_TOKEN = os.getenv('TELEGRAM_TOKEN', '8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g')
 OPERATOR_ID = 1888083882
 SHEET_ID = '1H_WmW28sCbymuhO8quPkvoOH6bYyzuoJ_8qjO09d34o'
 WORKSHEET_NAME = 'FastFoodOrders'
@@ -169,8 +170,7 @@ def show_main_menu(chat_id, user_id):
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
-    if user_id not in user_data:
-        user_data[user_id] = {'cart': {}, 'lang': 'rus'}
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
     markup.add(KeyboardButton('English 🇬🇧'), KeyboardButton('Русский 🇷🇺'), KeyboardButton('Oʻzbek 🇺🇿'))
     bot.send_message(message.chat.id, "🌟 " + get_text(user_id, 'start'), reply_markup=markup)
@@ -178,8 +178,7 @@ def start(message):
 @bot.message_handler(func=lambda m: m.text in ['English 🇬🇧', 'Русский 🇷🇺', 'Oʻzbek 🇺🇿'])
 def choose_language(message):
     user_id = message.from_user.id
-    if user_id not in user_data:
-        user_data[user_id] = {'cart': {}, 'lang': 'rus'}
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     lang_map = {'English 🇬🇧': 'eng', 'Русский 🇷🇺': 'rus', 'Oʻzbek 🇺🇿': 'uzb'}
     user_data[user_id]['lang'] = lang_map[message.text]
     show_main_menu(message.chat.id, user_id)
@@ -188,6 +187,7 @@ def choose_language(message):
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'order') in m.text and m.from_user.id != OPERATOR_ID)
 def place_order(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     markup = InlineKeyboardMarkup(row_width=2)
     for dish, price in MENU_ITEMS.items():
         markup.add(InlineKeyboardButton(f"{dish} ({price} UZS)", callback_data=f"add_{dish}"))
@@ -199,6 +199,7 @@ def place_order(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_'))
 def add_to_cart(call):
     user_id = call.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     dish = call.data[4:]
     user_data[user_id]['cart'][dish] = user_data[user_id]['cart'].get(dish, 0) + 1
     bot.answer_callback_query(call.id, f"Добавлено: {dish}")
@@ -206,6 +207,7 @@ def add_to_cart(call):
 @bot.callback_query_handler(func=lambda call: call.data == 'view_cart')
 def view_cart(call):
     user_id = call.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     cart = user_data[user_id]['cart']
     if not cart:
         bot.answer_callback_query(call.id, "Корзина пуста!")
@@ -221,6 +223,7 @@ def view_cart(call):
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_order')
 def confirm_order(call):
     user_id = call.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton(get_text(user_id, 'cash')), KeyboardButton(get_text(user_id, 'card')))
     bot.send_message(call.message.chat.id, "💰 " + get_text(user_id, 'payment'), reply_markup=markup)
@@ -229,6 +232,7 @@ def confirm_order(call):
 @bot.message_handler(func=lambda m: user_data.get(m.from_user.id, {}).get('state') == 'payment')
 def get_payment(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     if message.text not in [get_text(user_id, 'cash'), get_text(user_id, 'card')]:
         return
     user_data[user_id]['payment'] = message.text
@@ -240,6 +244,7 @@ def get_payment(message):
 @bot.message_handler(content_types=['location'], func=lambda m: user_data.get(m.from_user.id, {}).get('state') == 'location')
 def save_order(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     if not user_data[user_id].get('cart', {}):
         bot.send_message(message.chat.id, "Корзина пуста!")
         return
@@ -288,7 +293,7 @@ def save_order(message):
     if 'state' in user_data[user_id]:
         del user_data[user_id]['state']
 
-    # Уведомление оператору с геолокацией сразу
+    # Уведомление оператору
     msg = get_text(OPERATOR_ID, 'new_order_notify', num=order_num, username=username_display, location_link=location_link, dishes=dishes_text, total=order_total, payment=payment)
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton(get_text(OPERATOR_ID, 'confirm'), callback_data=f"confirm_{order_num}"))
@@ -296,10 +301,12 @@ def save_order(message):
     markup.add(InlineKeyboardButton(get_text(OPERATOR_ID, 'decline'), callback_data=f"decline_{order_num}"))
     bot.send_message(OPERATOR_ID, f"🔔 {msg}", reply_markup=markup)
 
-# === Связь с оператором ===
+# === Остальные handlers (с добавлением user_data.get для защиты от KeyError) ===
+
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'contact') in m.text and m.from_user.id != OPERATOR_ID)
 def contact_operator(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton(get_text(user_id, 'pm')), KeyboardButton(get_text(user_id, 'call')))
     bot.send_message(message.chat.id, get_text(user_id, 'contact_method'), reply_markup=markup)
@@ -308,6 +315,7 @@ def contact_operator(message):
 @bot.message_handler(func=lambda m: user_data.get(m.from_user.id, {}).get('state') == 'contact_method')
 def choose_contact_method(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     method = message.text
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton(get_text(user_id, 'share_contact'), request_contact=True))
@@ -318,6 +326,7 @@ def choose_contact_method(message):
 @bot.message_handler(content_types=['contact'], func=lambda m: user_data.get(m.from_user.id, {}).get('state') == 'share_contact')
 def receive_contact(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     username = message.from_user.username if message.from_user.username else "не указан"
     username_display = f"@{username}" if username != "не указан" else username
     phone = message.contact.phone_number
@@ -325,7 +334,8 @@ def receive_contact(message):
     bot.send_message(OPERATOR_ID, f"Запрос связи\nКлиент: {username_display} (ID: {user_id})\nСпособ: {method}\nТелефон: {phone}")
     bot.send_message(message.chat.id, get_text(user_id, 'contact_sent'))
     show_main_menu(message.chat.id, user_id)
-    del user_data[user_id]['state']
+    if 'state' in user_data[user_id]:
+        del user_data[user_id]['state']
 
 # === Подтверждение и доставка ===
 @bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_'))
@@ -379,6 +389,7 @@ def update_status(order_num, status):
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'details') in m.text and m.from_user.id != OPERATOR_ID)
 def my_orders(message):
     user_id = message.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     rows = sheet.get_all_values()[1:] if sheet.get_all_values() else []
     user_orders = [r for r in rows if r[2] == str(user_id)]
     if not user_orders:
@@ -403,17 +414,18 @@ def all_orders(message):
         msg += f"№{row[0]} | {row[1]} | {row[3]} | {row[4]} | {row[5]} + {row[6]} = {row[7]} UZS | {row[8]} | {row[9]}\nГеолокация: {location_link}\n\n"
     bot.send_message(message.chat.id, msg)
 
-# === Очистка (заголовки в строке 1) ===
+# === Очистка ===
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'clear_sheet') in m.text and m.from_user.id == OPERATOR_ID)
 def clear_all(message):
     sheet.clear()
     headers = ['Order_Num', 'Timestamp', 'User_ID', 'Username', 'Dishes', 'Order_Total', 'Delivery_Cost', 'Total_With_Delivery', 'Payment_Type', 'Status', 'Location']
-    sheet.update('A1', [headers])
+    sheet.append_row(headers)  # Правильный порядок: values, range_name
     bot.send_message(message.chat.id, "🗑️ Все заказы очищены. Заголовки в первой строке.")
 
 @bot.callback_query_handler(func=lambda call: call.data in ['back', 'clear_cart'])
 def back_handlers(call):
     user_id = call.from_user.id
+    user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
     if call.data == 'clear_cart':
         user_data[user_id]['cart'] = {}
         bot.answer_callback_query(call.id, "Корзина очищена")
