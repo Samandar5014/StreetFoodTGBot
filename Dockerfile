@@ -4,8 +4,11 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install prometheus-client  # <-- Добавь эту строку!
 
 COPY . .
 
-ENTRYPOINT ["python3", "bot.py"] 
+EXPOSE 8000  
+
+ENTRYPOINT ["python3", "bot.py"]
