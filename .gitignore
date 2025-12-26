@@ -28,3 +28,4 @@ ENV/
 Thumbs.db
 
 secret-values.yaml
+monitoring-values.yaml

@@ -3,6 +3,18 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
+import threading
+from prometheus_client import Counter, start_http_server
+
+# === Prometheus метрики ===
+ORDERS_TOTAL = Counter('streetfood_orders_total', 'Общее количество заказов', ['payment'])
+ORDERS_BY_DISH = Counter('streetfood_orders_by_dish', 'Заказы по блюдам', ['dish'])
+
+# Запуск Prometheus metrics сервера на порту 8000
+def start_metrics_server():
+    start_http_server(8000)
+
+threading.Thread(target=start_metrics_server, daemon=True).start()
 
 # Настройки
 BOT_TOKEN = '8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g'
@@ -30,7 +42,7 @@ MENU_ITEMS = {
     'Soda 🥤': 5000
 }
 
-# Переводы (new_order_notify с геолокацией)
+# Переводы
 TRANSLATIONS = {
     'eng': {
         'start': "Welcome! Choose your language:",
@@ -261,9 +273,14 @@ def save_order(message):
         order_total,
         payment,
         "pending",
-        location_coords  # Координаты в таблицу
+        location_coords
     ]
     sheet.append_row(row)
+
+    # === МЕТРИКИ ЗАКАЗОВ ===
+    ORDERS_TOTAL.labels(payment=payment).inc()
+    for dish, qty in cart.items():
+        ORDERS_BY_DISH.labels(dish=dish).inc(qty)
 
     bot.send_message(message.chat.id, f"✅ Заказ №{order_num} принят! Ожидайте подтверждения.")
     show_main_menu(message.chat.id, user_id)
