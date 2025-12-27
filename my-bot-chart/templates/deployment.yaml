@@ -86,4 +86,60 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- end }}apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "my-bot-chart.fullname" . }}
+  labels:
+    {{- include "my-bot-chart.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "my-bot-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "{{ .Values.metrics.path }}"
+        prometheus.io/port: "{{ .Values.metrics.port }}"
+      labels:
+        {{- include "my-bot-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "my-bot-chart.serviceAccountName" . }}
+
+      volumes:
+        - name: credentials-volume
+          secret:
+            secretName: telegram-bot-credentials
+            items:
+              - key: credentials.json
+                path: credentials.json
+
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+
+          env:
+            - name: TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "my-bot-chart.fullname" . }}-secret
+                  key: TELEGRAM_TOKEN
+
+          volumeMounts:
+            - name: credentials-volume
+              mountPath: /app/credentials.json
+              subPath: credentials.json
+              readOnly: true
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
