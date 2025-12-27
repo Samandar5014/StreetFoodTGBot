@@ -5,7 +5,7 @@ replicaCount: 1
 image:
   repository: samandar278/streetfood-bot  # docker-image in docker hub
   tag: latest  # image teg (can be fixed for stability, example sha)
-  pullPolicy: IfNotPresent  # policy of downloading image (local, if it is exist)
+  pullPolicy: Always
 
 # Telegram token via argo cd parameters(sefest way)
 bot:
