@@ -31,7 +31,7 @@ try:
     from oauth2client.service_account import ServiceAccountCredentials
 
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds_path = '/app/credentials.json'  # Путь из volumeMount в deployment.yaml
+    creds_path = '/app/credentials.json'  # Монтируется из Secret
     creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
     client = gspread.authorize(creds)
     SHEET_ID = '1H_WmW28sCbymuhO8quPkvoOH6bYyzuoJ_8qjO09d34o'
@@ -43,7 +43,10 @@ except Exception as e:
     print("Bot will run without saving orders to Sheets!")
 
 # === Конфиг ===
-BOT_TOKEN = os.getenv('TELEGRAM_TOKEN', '8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g')
+BOT_TOKEN = os.getenv('TELEGRAM_TOKEN')
+if not BOT_TOKEN:
+    raise ValueError("TELEGRAM_TOKEN not set in environment!")
+
 OPERATOR_ID = 1888083882
 
 MENU_ITEMS = {
@@ -277,7 +280,7 @@ def save_order(message):
     dishes_text = ", ".join([f"{d} x{q}" for d, q in cart.items()])
     timestamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    # Сохранение в Google Sheets (если доступно)
+    # Сохранение в Google Sheets
     if sheet:
         try:
             all_rows = sheet.get_all_values()
@@ -299,11 +302,11 @@ def save_order(message):
             sheet.append_row(row)
         except Exception as e:
             print(f"Failed to save order to Sheets: {e}")
-            order_num = "N/A (Sheets unavailable)"
+            order_num = "N/A (Sheets error)"
     else:
         order_num = "N/A (Sheets unavailable)"
 
-    # === МЕТРИКИ (защищённо) ===
+    # === МЕТРИКИ ===
     if ORDERS_TOTAL:
         ORDERS_TOTAL.labels(payment=payment).inc()
     if ORDERS_BY_DISH:
@@ -324,7 +327,8 @@ def save_order(message):
     markup.add(InlineKeyboardButton(get_text(OPERATOR_ID, 'decline'), callback_data=f"decline_{order_num}"))
     bot.send_message(OPERATOR_ID, f"🔔 {msg}", reply_markup=markup)
 
-# Остальные handlers (без изменений, они стабильные)
+# Остальные handlers (оставил как у тебя — они рабочие)
+
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'contact') in m.text and m.from_user.id != OPERATOR_ID)
 def contact_operator(message):
     user_id = message.from_user.id
@@ -473,5 +477,5 @@ def back_handlers(call):
         bot.answer_callback_query(call.id, "Корзина очищена")
     show_main_menu(call.message.chat.id, user_id)
 
-print("Bot starting...")
-bot.infinity_polling(non_stop=True)
+print("Bot starting successfully...")
+bot.infinity_polling()
