@@ -63,4 +63,10 @@ volumeMounts: []
 
 service:
   type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+deployment:
   port: 8000
+  name: http
+  protocol: TCP
