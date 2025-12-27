@@ -60,3 +60,7 @@ affinity: {}
 #Additional volumes and mounts (for credentials.json or other secrets—we'll add them later if needed)
 volumes: []
 volumeMounts: []
+
+service:
+  type: ClusterIP
+  port: 8000
