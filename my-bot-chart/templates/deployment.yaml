@@ -35,6 +35,16 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      volumes:
+        - name: credentials-volume
+          secret:
+            secretName: telegram-bot-credentials
+            items:
+              - key: credentials.json
+                path: credentials.json
+      {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           {{- with .Values.securityContext }}
@@ -53,18 +63,18 @@ spec:
                 secretKeyRef:
                   name: {{ include "my-bot-chart.fullname" . }}-secret
                   key: TELEGRAM_TOKEN
+          volumeMounts:
+            - name: credentials-volume
+              mountPath: /app/credentials.json
+              subPath: credentials.json
+              readOnly: true
+          {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.volumeMounts }}
-          volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
-      volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

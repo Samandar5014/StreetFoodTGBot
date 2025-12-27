@@ -1,35 +1,51 @@
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 import threading
-from prometheus_client import Counter, start_http_server
 import os
 
-# === Prometheus метрики ===
-ORDERS_TOTAL = Counter('streetfood_orders_total', 'Общее количество заказов', ['payment'])
-ORDERS_BY_DISH = Counter('streetfood_orders_by_dish', 'Заказы по блюдам', ['dish'])
+# === Prometheus метрики (с защитой от падения) ===
+try:
+    from prometheus_client import Counter, start_http_server
 
-# Запуск Prometheus metrics сервера на порту 8000
-def start_metrics_server():
-    start_http_server(8000)
+    ORDERS_TOTAL = Counter('streetfood_orders_total', 'Общее количество заказов', ['payment'])
+    ORDERS_BY_DISH = Counter('streetfood_orders_by_dish', 'Заказы по блюдам', ['dish'])
 
-threading.Thread(target=start_metrics_server, daemon=True).start()
+    def start_metrics_server():
+        try:
+            start_http_server(8000)
+            print("Prometheus metrics server started on port 8000")
+        except Exception as e:
+            print(f"Failed to start metrics server: {e}")
 
-# Настройки (токен из env в K8s, fallback для локального запуска)
+    threading.Thread(target=start_metrics_server, daemon=True).start()
+except Exception as e:
+    print(f"Failed to import or start Prometheus metrics: {e}")
+    ORDERS_TOTAL = None
+    ORDERS_BY_DISH = None
+
+# === Google Sheets (с защитой от падения) ===
+sheet = None
+try:
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds_path = '/app/credentials.json'  # Путь из volumeMount в deployment.yaml
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+    client = gspread.authorize(creds)
+    SHEET_ID = '1H_WmW28sCbymuhO8quPkvoOH6bYyzuoJ_8qjO09d34o'
+    WORKSHEET_NAME = 'FastFoodOrders'
+    sheet = client.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)
+    print("Google Sheets connected successfully")
+except Exception as e:
+    print(f"Failed to connect to Google Sheets: {e}")
+    print("Bot will run without saving orders to Sheets!")
+
+# === Конфиг ===
 BOT_TOKEN = os.getenv('TELEGRAM_TOKEN', '8464227500:AAF0qcol9pzCOSG4VJlz0KsZcdgVh5IeL6g')
 OPERATOR_ID = 1888083882
-SHEET_ID = '1H_WmW28sCbymuhO8quPkvoOH6bYyzuoJ_8qjO09d34o'
-WORKSHEET_NAME = 'FastFoodOrders'
 
-# Подключение к Google Sheets
-scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-client = gspread.authorize(creds)
-sheet = client.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)
-
-# Меню блюд
 MENU_ITEMS = {
     'Burger 🍔': 20000,
     'Pizza 🍕': 50000,
@@ -43,7 +59,6 @@ MENU_ITEMS = {
     'Soda 🥤': 5000
 }
 
-# Переводы
 TRANSLATIONS = {
     'eng': {
         'start': "Welcome! Choose your language:",
@@ -153,7 +168,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_text(user_id, key, **kwargs):
     lang = user_data.get(user_id, {}).get('lang', 'rus')
-    return TRANSLATIONS[lang][key].format(**kwargs)
+    return TRANSLATIONS.get(lang, TRANSLATIONS['rus'])[key].format(**kwargs)
 
 def show_main_menu(chat_id, user_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
@@ -183,7 +198,6 @@ def choose_language(message):
     user_data[user_id]['lang'] = lang_map[message.text]
     show_main_menu(message.chat.id, user_id)
 
-# === Заказ ===
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'order') in m.text and m.from_user.id != OPERATOR_ID)
 def place_order(message):
     user_id = message.from_user.id
@@ -249,7 +263,6 @@ def save_order(message):
         bot.send_message(message.chat.id, "Корзина пуста!")
         return
 
-    # Геолокация
     lat = message.location.latitude
     lon = message.location.longitude
     location_coords = f"{lat},{lon}"
@@ -264,28 +277,38 @@ def save_order(message):
     dishes_text = ", ".join([f"{d} x{q}" for d, q in cart.items()])
     timestamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    all_rows = sheet.get_all_values()
-    order_num = len(all_rows) if all_rows else 1
+    # Сохранение в Google Sheets (если доступно)
+    if sheet:
+        try:
+            all_rows = sheet.get_all_values()
+            order_num = len(all_rows) if all_rows else 1
 
-    row = [
-        order_num,
-        timestamp,
-        user_id,
-        username_display,
-        dishes_text,
-        order_total,
-        0,
-        order_total,
-        payment,
-        "pending",
-        location_coords
-    ]
-    sheet.append_row(row)
+            row = [
+                order_num,
+                timestamp,
+                user_id,
+                username_display,
+                dishes_text,
+                order_total,
+                0,
+                order_total,
+                payment,
+                "pending",
+                location_coords
+            ]
+            sheet.append_row(row)
+        except Exception as e:
+            print(f"Failed to save order to Sheets: {e}")
+            order_num = "N/A (Sheets unavailable)"
+    else:
+        order_num = "N/A (Sheets unavailable)"
 
-    # === МЕТРИКИ ЗАКАЗОВ ===
-    ORDERS_TOTAL.labels(payment=payment).inc()
-    for dish, qty in cart.items():
-        ORDERS_BY_DISH.labels(dish=dish).inc(qty)
+    # === МЕТРИКИ (защищённо) ===
+    if ORDERS_TOTAL:
+        ORDERS_TOTAL.labels(payment=payment).inc()
+    if ORDERS_BY_DISH:
+        for dish, qty in cart.items():
+            ORDERS_BY_DISH.labels(dish=dish).inc(qty)
 
     bot.send_message(message.chat.id, f"✅ Заказ №{order_num} принят! Ожидайте подтверждения.")
     show_main_menu(message.chat.id, user_id)
@@ -301,8 +324,7 @@ def save_order(message):
     markup.add(InlineKeyboardButton(get_text(OPERATOR_ID, 'decline'), callback_data=f"decline_{order_num}"))
     bot.send_message(OPERATOR_ID, f"🔔 {msg}", reply_markup=markup)
 
-# === Остальные handlers (с добавлением user_data.get для защиты от KeyError) ===
-
+# Остальные handlers (без изменений, они стабильные)
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'contact') in m.text and m.from_user.id != OPERATOR_ID)
 def contact_operator(message):
     user_id = message.from_user.id
@@ -337,21 +359,29 @@ def receive_contact(message):
     if 'state' in user_data[user_id]:
         del user_data[user_id]['state']
 
-# === Подтверждение и доставка ===
 @bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_'))
 def confirm_only(call):
+    if not sheet:
+        bot.answer_callback_query(call.id, "Sheets недоступен")
+        return
     order_num = call.data.split('_')[1]
     update_status(order_num, "confirmed")
     bot.answer_callback_query(call.id, "Заказ подтверждён")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('decline_'))
 def decline_order(call):
+    if not sheet:
+        bot.answer_callback_query(call.id, "Sheets недоступен")
+        return
     order_num = call.data.split('_')[1]
     update_status(order_num, "declined")
     bot.answer_callback_query(call.id, "Заказ отклонён")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delivery_'))
 def ask_delivery_cost(call):
+    if not sheet:
+        bot.answer_callback_query(call.id, "Sheets недоступен")
+        return
     order_num = call.data.split('_')[1]
     operator_state[OPERATOR_ID] = {'order_num': order_num}
     bot.send_message(OPERATOR_ID, get_text(OPERATOR_ID, 'enter_delivery'))
@@ -359,6 +389,9 @@ def ask_delivery_cost(call):
 
 @bot.message_handler(func=lambda m: m.from_user.id == OPERATOR_ID and operator_state.get(OPERATOR_ID))
 def set_delivery_cost(message):
+    if not sheet:
+        bot.send_message(OPERATOR_ID, "Sheets недоступен")
+        return
     try:
         cost = int(message.text.strip())
         if cost < 0:
@@ -379,19 +412,23 @@ def set_delivery_cost(message):
         bot.send_message(OPERATOR_ID, "Введите число (например: 15000)")
 
 def update_status(order_num, status):
+    if not sheet:
+        return
     rows = sheet.get_all_values()
     for i, row in enumerate(rows):
         if row[0] == str(order_num):
             sheet.update_cell(i+1, 10, status)
             break
 
-# === Мои заказы и история ===
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'details') in m.text and m.from_user.id != OPERATOR_ID)
 def my_orders(message):
     user_id = message.from_user.id
     user_data[user_id] = user_data.get(user_id, {'cart': {}, 'lang': 'rus'})
+    if not sheet:
+        bot.send_message(message.chat.id, "История заказов недоступна")
+        return
     rows = sheet.get_all_values()[1:] if sheet.get_all_values() else []
-    user_orders = [r for r in rows if r[2] == str(user_id)]
+    user_orders = [r for r in rows if len(r) > 2 and r[2] == str(user_id)]
     if not user_orders:
         bot.send_message(message.chat.id, get_text(user_id, 'no_orders'))
         return
@@ -403,6 +440,9 @@ def my_orders(message):
 
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'show_history') in m.text and m.from_user.id == OPERATOR_ID)
 def all_orders(message):
+    if not sheet:
+        bot.send_message(message.chat.id, "История недоступна")
+        return
     rows = sheet.get_all_values()[1:] if sheet.get_all_values() else []
     if not rows:
         bot.send_message(message.chat.id, "Нет заказов.")
@@ -414,12 +454,14 @@ def all_orders(message):
         msg += f"№{row[0]} | {row[1]} | {row[3]} | {row[4]} | {row[5]} + {row[6]} = {row[7]} UZS | {row[8]} | {row[9]}\nГеолокация: {location_link}\n\n"
     bot.send_message(message.chat.id, msg)
 
-# === Очистка ===
 @bot.message_handler(func=lambda m: get_text(m.from_user.id, 'clear_sheet') in m.text and m.from_user.id == OPERATOR_ID)
 def clear_all(message):
+    if not sheet:
+        bot.send_message(message.chat.id, "Sheets недоступен")
+        return
     sheet.clear()
     headers = ['Order_Num', 'Timestamp', 'User_ID', 'Username', 'Dishes', 'Order_Total', 'Delivery_Cost', 'Total_With_Delivery', 'Payment_Type', 'Status', 'Location']
-    sheet.append_row(headers)  # Правильный порядок: values, range_name
+    sheet.append_row(headers)
     bot.send_message(message.chat.id, "🗑️ Все заказы очищены. Заголовки в первой строке.")
 
 @bot.callback_query_handler(func=lambda call: call.data in ['back', 'clear_cart'])
@@ -431,4 +473,5 @@ def back_handlers(call):
         bot.answer_callback_query(call.id, "Корзина очищена")
     show_main_menu(call.message.chat.id, user_id)
 
-bot.infinity_polling()
+print("Bot starting...")
+bot.infinity_polling(non_stop=True)
