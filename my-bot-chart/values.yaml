@@ -76,3 +76,4 @@ metrics:
 
 pod:
   hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
