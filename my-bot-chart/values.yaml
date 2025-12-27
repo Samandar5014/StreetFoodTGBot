@@ -70,3 +70,6 @@ deployment:
   port: 8000
   name: http
   protocol: TCP
+
+metrics:
+  port: 8000
