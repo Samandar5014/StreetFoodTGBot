@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,4 +28,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: samandar278/streetfood-bot:latest,samandar278/streetfood-bot:${{ github.sha }}
+          tags: samandar278/streetfood-bot:latest
