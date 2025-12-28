@@ -5,9 +5,7 @@ metadata:
   labels:
     {{- include "my-bot-chart.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "my-bot-chart.selectorLabels" . | nindent 6 }}
@@ -17,24 +15,10 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.metrics.port }}"
         prometheus.io/path: "/metrics"
-      {{- with .Values.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
         {{- include "my-bot-chart.labels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       serviceAccountName: {{ include "my-bot-chart.serviceAccountName" . }}
-      {{- with .Values.podSecurityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       volumes:
         - name: credentials-volume
           secret:
@@ -42,41 +26,34 @@ spec:
             items:
               - key: credentials.json
                 path: credentials.json
-      {{- with .Values.volumes }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.metrics.port }}
               name: metrics
               protocol: TCP
-          {{- if .Values.bot.telegramToken }}
           env:
             - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "my-bot-chart.fullname" . }}-secret
+                  name: telegrambot-my-bot-chart-secret
                   key: TELEGRAM_TOKEN
-          {{- end }}
+            - name: GOOGLE_CREDENTIALS_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: credentials.json
           volumeMounts:
             - name: credentials-volume
               mountPath: /app/credentials.json
               subPath: credentials.json
               readOnly: true
-          {{- with .Values.volumeMounts }}
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.resources }}
           resources:
+            {{- with .Values.resources }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
