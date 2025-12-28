@@ -44,8 +44,6 @@ except Exception as e:
 
 # === Конфиг ===
 BOT_TOKEN = os.getenv('TELEGRAM_TOKEN')
-if not BOT_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN not set in environment!")
 
 OPERATOR_ID = 1888083882
 
