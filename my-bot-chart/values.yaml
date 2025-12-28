@@ -22,3 +22,9 @@ resources:
 serviceAccount:
   create: true
   automount: true
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
