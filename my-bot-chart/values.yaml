@@ -45,4 +45,3 @@ service:
 pod:
   hostNetwork: true
   dnsPolicy: ClusterFirstWithHostNet
-a
