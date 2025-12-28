@@ -7,12 +7,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-ports:
-  - name: http
-    port: 80
-    targetPort: 8000
-  - name: metrics
-    port: 8000
-    targetPort: 8000
+    - name: metrics
+      port: 80
+      targetPort: metrics
+      protocol: TCP
   selector:
     {{- include "my-bot-chart.selectorLabels" . | nindent 4 }}
