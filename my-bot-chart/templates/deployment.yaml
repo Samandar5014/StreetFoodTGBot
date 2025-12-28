@@ -35,7 +35,7 @@ spec:
               name: metrics
               protocol: TCP
           env:
-            - name: TELEGRAM_TOKEN
+            - name: telegram-bot-credentials
               valueFrom:
                 secretKeyRef:
                   name: {{ include "my-bot-chart.fullname" . }}-secret
