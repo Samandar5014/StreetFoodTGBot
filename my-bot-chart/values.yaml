@@ -7,7 +7,19 @@ image:
   tag: latest
   pullPolicy: Always
 
-env: []
+env:
+  - name: TELEGRAM_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: streetfood-bot-secrets
+        key: TELEGRAM_TOKEN
+
+  - name: GOOGLE_CREDENTIALS
+    valueFrom:
+      secretKeyRef:
+        name: streetfood-bot-secrets
+        key: GOOGLE_CREDENTIALS
+
 
 bot:
   telegramToken: ""
