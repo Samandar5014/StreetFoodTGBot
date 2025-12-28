@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: streetfood-bot
+  labels:
+    release: kube-prometheus-stack-1766813498
+spec:
+  namespaceSelector:
+    matchNames:
+      - telegram
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: my-bot-chart
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

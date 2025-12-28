@@ -1,35 +1,15 @@
-# amount of replica more than 1 will brin 409 error for telegram bots
 replicaCount: 1
 
-# Container option and values
 image:
   repository: samandar278/streetfood-bot
   tag: latest
   pullPolicy: Always
 
-env: []
-
 bot:
   telegramToken: ""
-  googleCredentials: ""
 
-
-imagePullSecrets: []
-
-nameOverride: ""
-fullnameOverride: ""
-
-serviceAccount:
-  create: true
-  automount: true
-  annotations: {}
-  name: ""
-
-podAnnotations: {}
-podLabels: {}
-
-podSecurityContext: {}
-securityContext: {}
+metrics:
+  port: 8000
 
 resources:
   limits:
@@ -39,19 +19,6 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-autoscaling:
-  enabled: false
-
-nodeSelector: {}
-tolerations: []
-affinity: {}
-
-volumes: []
-volumeMounts: []
-
-service:
-  type: ClusterIP
-  port: 80
-
-metrics:
-  port: 8000
+serviceAccount:
+  create: true
+  automount: true

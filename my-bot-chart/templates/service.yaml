@@ -6,10 +6,12 @@ metadata:
     {{- include "my-bot-chart.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
-  ports:
-    - port: 80
-      targetPort: metrics
-      protocol: TCP
-      name: http
   selector:
     {{- include "my-bot-chart.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: {{ .Values.metrics.port }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: {{ .Values.metrics.port }}
