@@ -52,17 +52,19 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: Always  # <-- Важно: всегда pull новый latest
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.metrics.port }}
               name: metrics
               protocol: TCP
+          {{- if .Values.bot.telegramToken }}
           env:
             - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "my-bot-chart.fullname" . }}-secret
                   key: TELEGRAM_TOKEN
+          {{- end }}
           volumeMounts:
             - name: credentials-volume
               mountPath: /app/credentials.json
