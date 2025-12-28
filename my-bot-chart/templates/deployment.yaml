@@ -35,11 +35,16 @@ spec:
               name: metrics
               protocol: TCP
           env:
-            - name: telegram-bot-credentials
+            - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "my-bot-chart.fullname" . }}-secret
                   key: TELEGRAM_TOKEN
+            - name: GOOGLE_CREDENTIALS_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "my-bot-chart.fullname" . }}-secret
+                  key: credentials.json
           volumeMounts:
             - name: credentials-volume
               mountPath: /app/credentials.json
