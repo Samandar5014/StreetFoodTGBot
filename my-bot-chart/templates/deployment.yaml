@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: credentials-volume
           secret:
-            secretName: telegram-bot-credentials
+            secretName: {{ include "my-bot-chart.fullname" . }}-secret
             items:
               - key: credentials.json
                 path: credentials.json
@@ -38,22 +38,17 @@ spec:
             - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: telegrambot-my-bot-chart-secret
+                  name: {{ include "my-bot-chart.fullname" . }}-secret
                   key: TELEGRAM_TOKEN
-            - name: GOOGLE_CREDENTIALS_JSON
-              valueFrom:
-                secretKeyRef:
-                  name: telegram-bot-credentials
-                  key: credentials.json
           volumeMounts:
             - name: credentials-volume
               mountPath: /app/credentials.json
               subPath: credentials.json
               readOnly: true
+          {{- with .Values.resources }}
           resources:
-            {{- with .Values.resources }}
             {{- toYaml . | nindent 12 }}
-            {{- end }}
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
