@@ -55,3 +55,7 @@ service:
 
 metrics:
   port: 8000
+
+pod:
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
