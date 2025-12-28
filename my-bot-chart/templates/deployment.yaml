@@ -11,21 +11,10 @@ spec:
       {{- include "my-bot-chart.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "{{ .Values.metrics.port }}"
-        prometheus.io/path: "/metrics"
       labels:
         {{- include "my-bot-chart.labels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "my-bot-chart.serviceAccountName" . }}
-      volumes:
-        - name: credentials-volume
-          secret:
-            secretName: {{ include "my-bot-chart.fullname" . }}-secret
-            items:
-              - key: credentials.json
-                path: credentials.json
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -33,7 +22,6 @@ spec:
           ports:
             - containerPort: {{ .Values.metrics.port }}
               name: metrics
-              protocol: TCP
           env:
             - name: TELEGRAM_TOKEN
               valueFrom:
@@ -50,19 +38,7 @@ spec:
               mountPath: /app/credentials.json
               subPath: credentials.json
               readOnly: true
-          {{- with .Values.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      volumes:
+        - name: credentials-volume
+          secret:
+            secretName: {{ include "my-bot-chart.fullname" . }}-secret
